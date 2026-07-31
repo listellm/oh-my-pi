@@ -4,6 +4,7 @@ import { effectiveReserveTokens, estimateTokens, resolveThresholdTokens } from "
 import type { Tool as AiTool, Model } from "@oh-my-pi/pi-ai";
 import { toolWireSchema } from "@oh-my-pi/pi-ai/utils/schema";
 import { formatNumber } from "@oh-my-pi/pi-utils";
+import { applyCatalogDescriptionBudget } from "../../catalog-budget";
 import type { Skill } from "../../extensibility/skills";
 import type { AgentSession } from "../../session/agent-session";
 import { estimateInlineSavings, type SnapcompactSavingsEstimate } from "../../session/snapcompact-inline";
@@ -50,26 +51,37 @@ export interface NonMessageTokenSource {
 		};
 	};
 	readonly skills?: readonly Skill[];
+	readonly skillsSettings?: { readonly catalogDescriptionBudgetChars?: number };
 }
 
 const EMPTY_STRING_PARTS: string[] = [];
 const EMPTY_TOOLS: ReadonlyArray<Pick<Tool, "name" | "description" | "parameters">> = [];
 const EMPTY_SKILLS: readonly Skill[] = [];
 
+/** Mirrors the `?? -1` default `buildSystemPrompt` applies to the same setting. */
+function skillsCatalogBudget(session: NonMessageTokenSource): number {
+	return session.skillsSettings?.catalogDescriptionBudgetChars ?? -1;
+}
+
 /**
  * Skills actually rendered into the system prompt, mirroring the filter in
  * `buildSystemPrompt` (`system-prompt.ts`): the `read` tool must be present so
  * the model can fetch skill content, and skills with frontmatter `hide: true`
- * (or `disable-model-invocation`, normalized onto `hide`) are excluded.
+ * (or `disable-model-invocation`, normalized onto `hide`) are excluded, and
+ * `skills.catalogDescriptionBudgetChars` empties the descriptions past its cap.
  * Accounting must count only these so the Skills category and the System-prompt
  * subtraction stay aligned with the provider-facing prompt.
  */
 function renderedSkills(
 	skills: readonly Skill[],
 	tools: ReadonlyArray<Pick<Tool, "name" | "description" | "parameters">>,
+	budgetChars: number,
 ): readonly Skill[] {
 	if (!tools.some(tool => tool.name === "read")) return EMPTY_SKILLS;
-	return skills.filter(skill => skill.hide !== true);
+	return applyCatalogDescriptionBudget(
+		skills.filter(skill => skill.hide !== true),
+		budgetChars,
+	);
 }
 
 export function estimateSkillsTokens(skills: readonly Skill[]): number {
@@ -127,6 +139,7 @@ interface NonMessageTokenCache {
 	systemPromptRef: readonly string[];
 	toolsRef: ReadonlyArray<Pick<Tool, "name" | "description" | "parameters">>;
 	skillsRef: readonly Skill[];
+	budgetRef: number;
 	tokens: number | undefined;
 	breakdown:
 		| {
@@ -149,16 +162,18 @@ function nonMessageTokenCacheEntry(session: NonMessageTokenSource): NonMessageTo
 	const systemPromptRef = session.systemPrompt ?? EMPTY_STRING_PARTS;
 	const toolsRef = session.agent?.state?.tools ?? EMPTY_TOOLS;
 	const skillsRef = session.skills ?? EMPTY_SKILLS;
+	const budgetRef = skillsCatalogBudget(session);
 	let entry = cachedSession[NON_MESSAGE_TOKEN_CACHE];
 	if (
 		entry &&
 		entry.systemPromptRef === systemPromptRef &&
 		entry.toolsRef === toolsRef &&
-		entry.skillsRef === skillsRef
+		entry.skillsRef === skillsRef &&
+		entry.budgetRef === budgetRef
 	) {
 		return entry;
 	}
-	entry = { systemPromptRef, toolsRef, skillsRef, tokens: undefined, breakdown: undefined };
+	entry = { systemPromptRef, toolsRef, skillsRef, budgetRef, tokens: undefined, breakdown: undefined };
 	cachedSession[NON_MESSAGE_TOKEN_CACHE] = entry;
 	return entry;
 }
@@ -188,7 +203,9 @@ export function computeNonMessageBreakdown(session: NonMessageTokenSource): {
 	const entry = nonMessageTokenCacheEntry(session);
 	if (entry.breakdown) return entry.breakdown;
 	const tools = session.agent?.state?.tools ?? EMPTY_TOOLS;
-	const skillsTokens = estimateSkillsTokens(renderedSkills(session.skills ?? EMPTY_SKILLS, tools));
+	const skillsTokens = estimateSkillsTokens(
+		renderedSkills(session.skills ?? EMPTY_SKILLS, tools, skillsCatalogBudget(session)),
+	);
 	const toolsTokens = estimateToolSchemaTokens(tools);
 	const systemPromptParts = session.systemPrompt ?? EMPTY_STRING_PARTS;
 	const systemContextTokens = countTokens(systemPromptParts.slice(1));
