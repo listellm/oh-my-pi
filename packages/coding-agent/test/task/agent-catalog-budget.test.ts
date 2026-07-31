@@ -30,8 +30,6 @@ const charlie = {
 } satisfies AgentDefinition;
 
 function makeSession(overrides: Partial<Record<SettingPath, unknown>> = {}): ToolSession {
-	// Typed (not asserted) so a future required TaskTool session dependency
-	// fails to compile here rather than surfacing as a runtime undefined.
 	const session: ToolSession = {
 		cwd: process.cwd(),
 		hasUI: false,

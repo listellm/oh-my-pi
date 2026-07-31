@@ -1,16 +1,6 @@
 export type BudgetedCatalogEntry<T> = T & { descriptionOmitted?: true };
 
-/**
- * Limits prompt descriptions without changing skill or agent availability.
- *
- * Emptying `description` is the enforcement; `descriptionOmitted` is a
- * rendering hint that lets `system-prompt.md`, `custom-system-prompt.md`, and
- * `task.md` drop the separator rather than emit a dangling one. A budget is
- * spent in array order, so callers decide which entries keep their text.
- *
- * Any negative or non-finite budget means unlimited: a malformed setting must
- * fail open rather than silently blank the whole catalogue.
- */
+/** Limits descriptions. Malformed budgets fail open to preserve catalogue visibility. */
 export function applyCatalogDescriptionBudget<T extends { description: string }>(
 	entries: readonly T[],
 	budgetChars: number,
