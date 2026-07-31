@@ -830,8 +830,6 @@ describe("system prompt tool inventory", () => {
 		const compact = await renderSkillCatalog(0, BUDGET_SKILLS, "Custom prompt");
 		const partial = await renderSkillCatalog(44, BUDGET_SKILLS, "Custom prompt");
 
-		// Omitting any description makes "Scan descriptions" a false claim, so the
-		// guidance must fall back to the neutral sentence — never both.
 		for (const text of [compact, partial]) {
 			expect(text).not.toContain("Scan descriptions for your task domain.");
 			expect(text).toContain("Skills are specialized knowledge.\nIf a skill applies");
