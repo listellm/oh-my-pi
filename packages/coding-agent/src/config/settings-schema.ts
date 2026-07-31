@@ -4724,6 +4724,8 @@ export const SETTINGS_SCHEMA = {
 		default: [] as string[],
 	},
 
+	"task.agentCatalogDescriptionBudgetChars": { type: "number", default: -1 },
+
 	"task.agentModelOverrides": {
 		type: "record",
 		default: DEFAULT_AGENT_MODEL_OVERRIDES,
@@ -4812,6 +4814,8 @@ export const SETTINGS_SCHEMA = {
 	"skills.ignoredSkills": { type: "array", default: [] as string[] },
 
 	"skills.includeSkills": { type: "array", default: [] as string[] },
+
+	"skills.catalogDescriptionBudgetChars": { type: "number", default: -1 },
 
 	// Commands
 	"commands.enableClaudeUser": {
@@ -5751,6 +5755,7 @@ export interface SkillsSettings {
 	customDirectories?: string[];
 	ignoredSkills?: string[];
 	includeSkills?: string[];
+	catalogDescriptionBudgetChars?: number;
 	disabledExtensions?: string[];
 }
 
