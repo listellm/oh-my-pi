@@ -48,4 +48,20 @@ describe("applyCatalogDescriptionBudget", () => {
 	it("handles an empty catalogue", () => {
 		expect(applyCatalogDescriptionBudget([], 5)).toEqual([]);
 	});
+
+	// A budget arrives straight from config with no schema validation
+	// (`Settings.get` returns the raw value), so a malformed one must fail open
+	// to unlimited. `null` in particular used to coerce through `spent > 0` and
+	// silently blank the whole catalogue.
+	it.each([
+		["null", null],
+		["undefined", undefined],
+		["NaN", Number.NaN],
+		["Infinity", Number.POSITIVE_INFINITY],
+		["a string", "2000"],
+		["another negative", -100],
+	])("treats %s as unlimited rather than omitting descriptions", (_label, budget) => {
+		const result = applyCatalogDescriptionBudget(entries, budget as number);
+		expect(result.map(entry => entry.description)).toEqual(["AAAA", "BBBB", "CCCC"]);
+	});
 });
