@@ -91,6 +91,7 @@ export interface NonMessageTokenSource {
 	};
 	readonly skills?: readonly Skill[];
 	readonly skillsSettings?: { readonly catalogDescriptionBudgetChars?: number };
+	readonly settings?: { get(key: "task.agentCatalogDescriptionBudgetChars"): number };
 }
 
 const EMPTY_STRING_PARTS: string[] = [];
@@ -100,6 +101,16 @@ const EMPTY_SKILLS: readonly Skill[] = [];
 /** Mirrors the `?? -1` default `buildSystemPrompt` applies to the same setting. */
 function skillsCatalogBudget(session: NonMessageTokenSource): number {
 	return session.skillsSettings?.catalogDescriptionBudgetChars ?? -1;
+}
+
+/**
+ * `TaskTool.description` is a live getter over this setting, so changing it
+ * rewrites a tool description in place without replacing the tools array. The
+ * memo keys off array identity, so the budget has to join the key or a stale
+ * tool total survives the change.
+ */
+function agentCatalogBudget(session: NonMessageTokenSource): number {
+	return session.settings?.get("task.agentCatalogDescriptionBudgetChars") ?? -1;
 }
 
 /**
@@ -183,6 +194,7 @@ interface NonMessageTokenCache {
 	// so instance identity doubles as the encoding key.
 	tokenizerRef: Tokenizer;
 	budgetRef: number;
+	agentBudgetRef: number;
 	tokens: number | undefined;
 	breakdown:
 		| {
@@ -206,6 +218,7 @@ function nonMessageTokenCacheEntry(session: NonMessageTokenSource, tokenizer: To
 	const toolsRef = session.agent?.state?.tools ?? EMPTY_TOOLS;
 	const skillsRef = session.skills ?? EMPTY_SKILLS;
 	const budgetRef = skillsCatalogBudget(session);
+	const agentBudgetRef = agentCatalogBudget(session);
 	let entry = cachedSession[NON_MESSAGE_TOKEN_CACHE];
 	if (
 		entry &&
@@ -213,7 +226,8 @@ function nonMessageTokenCacheEntry(session: NonMessageTokenSource, tokenizer: To
 		entry.toolsRef === toolsRef &&
 		entry.skillsRef === skillsRef &&
 		entry.tokenizerRef === tokenizer &&
-		entry.budgetRef === budgetRef
+		entry.budgetRef === budgetRef &&
+		entry.agentBudgetRef === agentBudgetRef
 	) {
 		return entry;
 	}
@@ -223,6 +237,7 @@ function nonMessageTokenCacheEntry(session: NonMessageTokenSource, tokenizer: To
 		skillsRef,
 		tokenizerRef: tokenizer,
 		budgetRef,
+		agentBudgetRef,
 		tokens: undefined,
 		breakdown: undefined,
 	};

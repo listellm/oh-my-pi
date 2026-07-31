@@ -232,3 +232,51 @@ describe("computeNonMessageBreakdown skills description budget", () => {
 		expect(computeNonMessageBreakdown(src as never).skillsTokens).toBeLessThan(unlimited);
 	});
 });
+
+/**
+ * Contract: `TaskTool.description` is a live getter over
+ * `task.agentCatalogDescriptionBudgetChars`, so changing that setting rewrites a
+ * tool description in place while the tools array keeps its identity. The memo
+ * keys off that identity, so the budget has to join the key or the stale tool
+ * total survives and compaction is sized against a catalogue that no longer
+ * matches the provider-bound one.
+ */
+describe("computeNonMessageBreakdown agent catalogue budget", () => {
+	function sourceWithLiveTaskDescription(budgetChars: number) {
+		const settings = { catalogDescriptionBudgetChars: budgetChars };
+		// Stands in for TaskTool: one stable object whose description re-renders
+		// from the current budget on every read.
+		const taskTool = {
+			name: "task",
+			parameters: {},
+			get description() {
+				return settings.catalogDescriptionBudgetChars === 0
+					? "Available agents: scout, designer, reviewer"
+					: `Available agents:\n${"scout does deep investigation across the repository. ".repeat(40)}`;
+			},
+		};
+		return {
+			settings: { get: () => settings.catalogDescriptionBudgetChars },
+			source: { systemPrompt: ["You are an agent."], agent: { state: { tools: [taskTool] } }, skills: [] },
+			settingsStore: settings,
+		};
+	}
+
+	it("recomputes tool tokens when the budget changes on a stable tools reference", () => {
+		const { source, settingsStore, settings } = sourceWithLiveTaskDescription(-1);
+		const src = { ...source, settings };
+		const unlimited = computeNonMessageBreakdown(src as never).toolsTokens;
+		settingsStore.catalogDescriptionBudgetChars = 0;
+		expect(computeNonMessageBreakdown(src as never).toolsTokens).toBeLessThan(unlimited);
+	});
+
+	it("recomputes the collapsed non-message total for the same change", () => {
+		const { source, settingsStore, settings } = sourceWithLiveTaskDescription(0);
+		const src = { ...source, settings };
+		const nameOnly = computeNonMessageTokens(src as never);
+		settingsStore.catalogDescriptionBudgetChars = -1;
+		// Raising the budget must not serve the cached name-only total, which
+		// would undercount and skip compaction that is actually needed.
+		expect(computeNonMessageTokens(src as never)).toBeGreaterThan(nameOnly);
+	});
+});
