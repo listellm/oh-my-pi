@@ -10,6 +10,7 @@ import { renderToolInventory } from "@oh-my-pi/pi-ai/dialect";
 import { $env, getGpuCachePath, getProjectDir, hasFsCode, isEnoent, logger, prompt } from "@oh-my-pi/pi-utils";
 import { contextFileCapability } from "./capability/context-file";
 import { systemPromptCapability } from "./capability/system-prompt";
+import { applyCatalogDescriptionBudget } from "./catalog-budget";
 import { findConfigFile } from "./config";
 import type { Personality, SkillsSettings } from "./config/settings";
 import { type ContextFile, loadCapability, type SystemPrompt as SystemPromptFile } from "./discovery";
@@ -835,6 +836,10 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 	// - drop skills with frontmatter `hide: true` (still loadable via skill:// and /skill:<name>).
 	const hasRead = toolNames.includes("read");
 	const filteredSkills = hasRead ? skills.filter(skill => skill.hide !== true) : [];
+	const budgetedSkills = applyCatalogDescriptionBudget(
+		filteredSkills,
+		skillsSettings?.catalogDescriptionBudgetChars ?? -1,
+	);
 
 	const effectiveSystemPromptCustomization = dedupePromptSource(systemPromptCustomization, [
 		resolvedCustomPrompt,
@@ -864,7 +869,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		contextFiles,
 		agentsMdSearch: { files: agentsMdFiles },
 		workspaceTree,
-		skills: filteredSkills,
+		skills: budgetedSkills,
 		rules: rules ?? [],
 		alwaysApplyRules: injectedAlwaysApplyRules,
 		cwd: promptCwd,
