@@ -49,10 +49,7 @@ describe("applyCatalogDescriptionBudget", () => {
 		expect(applyCatalogDescriptionBudget([], 5)).toEqual([]);
 	});
 
-	// A budget arrives straight from config with no schema validation
-	// (`Settings.get` returns the raw value), so a malformed one must fail open
-	// to unlimited. `null` in particular used to coerce through `spent > 0` and
-	// silently blank the whole catalogue.
+	// Config values are unvalidated, so malformed budgets must fail open.
 	it.each([
 		["null", null],
 		["undefined", undefined],
