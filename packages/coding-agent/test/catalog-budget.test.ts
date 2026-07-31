@@ -1,0 +1,51 @@
+import { describe, expect, it } from "bun:test";
+import { applyCatalogDescriptionBudget } from "../src/catalog-budget";
+
+describe("applyCatalogDescriptionBudget", () => {
+	const entries = [
+		{ name: "a", description: "AAAA", blocking: true },
+		{ name: "b", description: "BBBB", blocking: false },
+		{ name: "c", description: "CCCC", blocking: false },
+	];
+
+	it("returns descriptions untouched (and the same reference) when the budget is unlimited (-1)", () => {
+		const result = applyCatalogDescriptionBudget(entries, -1);
+		expect(result).toBe(entries);
+		expect(result.map(entry => entry.description)).toEqual(["AAAA", "BBBB", "CCCC"]);
+	});
+
+	it("returns the same reference when a positive budget fits every description", () => {
+		expect(applyCatalogDescriptionBudget(entries, 12)).toBe(entries);
+	});
+
+	it("omits every description at budget zero while keeping names and other fields", () => {
+		const result = applyCatalogDescriptionBudget(entries, 0);
+		expect(result.map(entry => entry.name)).toEqual(["a", "b", "c"]);
+		expect(result.map(entry => entry.description)).toEqual(["", "", ""]);
+		expect(result.map(entry => entry.blocking)).toEqual([true, false, false]);
+	});
+
+	it("retains descriptions in order until the budget is exhausted, then name-only for the rest", () => {
+		const result = applyCatalogDescriptionBudget(entries, 8);
+		expect(result.map(entry => entry.description)).toEqual(["AAAA", "BBBB", ""]);
+	});
+
+	it("uses prefix semantics: once exhausted, later entries stay name-only even if they would fit", () => {
+		const mixed = [
+			{ name: "a", description: "AAAA" },
+			{ name: "b", description: "BBBBBB" },
+			{ name: "c", description: "C" },
+		];
+		const result = applyCatalogDescriptionBudget(mixed, 5);
+		expect(result.map(entry => entry.description)).toEqual(["AAAA", "", ""]);
+	});
+
+	it("renders name-only from the first entry when it alone overspends the budget", () => {
+		const result = applyCatalogDescriptionBudget(entries, 3);
+		expect(result.map(entry => entry.description)).toEqual(["", "", ""]);
+	});
+
+	it("handles an empty catalogue", () => {
+		expect(applyCatalogDescriptionBudget([], 5)).toEqual([]);
+	});
+});
