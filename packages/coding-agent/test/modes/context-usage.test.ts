@@ -177,3 +177,60 @@ describe("computeNonMessageBreakdown skills filtering", () => {
 		expect(b.systemPromptTokens).toBe(computeNonMessageBreakdown(session([], []), tokenizer).systemPromptTokens);
 	});
 });
+
+/**
+ * Contract: `skills.catalogDescriptionBudgetChars` empties descriptions past its
+ * cap in the rendered prompt, so accounting must drop them too. Counting the
+ * unbudgeted catalogue inflates the Skills category and over-subtracts from
+ * System prompt, which can push the category totals past `usedTokens`.
+ */
+describe("computeNonMessageBreakdown skills description budget", () => {
+	const readTool = { name: "read", description: "read files", parameters: {} };
+	const wordy = { name: "wordy", description: "W".repeat(4000), filePath: "/s/w.md" };
+	const terse = { name: "terse", description: "small", filePath: "/s/t.md" };
+	// The prompt as rendered at budget 0: names only, no descriptions.
+	const nameOnlyPrompt = "You are an agent.\nSkills:\n- wordy\n- terse\n";
+
+	function session(budgetChars?: number) {
+		return {
+			systemPrompt: [nameOnlyPrompt],
+			agent: { state: { tools: [readTool] } },
+			skills: [wordy, terse],
+			skillsSettings: budgetChars === undefined ? undefined : { catalogDescriptionBudgetChars: budgetChars },
+		} as never;
+	}
+
+	it("excludes descriptions the budget omitted", () => {
+		const budgeted = computeNonMessageBreakdown(session(0));
+		const unbudgeted = computeNonMessageBreakdown(session(-1));
+		expect(budgeted.skillsTokens).toBeLessThan(unbudgeted.skillsTokens);
+		// Names still cost tokens, and the 4000-char description no longer does.
+		expect(budgeted.skillsTokens).toBeGreaterThan(0);
+		expect(budgeted.skillsTokens).toBeLessThan(100);
+	});
+
+	it("does not over-subtract from the System prompt category", () => {
+		expect(computeNonMessageBreakdown(session(0)).systemPromptTokens).toBeGreaterThan(0);
+	});
+
+	it("counts every description when no budget is configured", () => {
+		expect(computeNonMessageBreakdown(session()).skillsTokens).toBe(
+			computeNonMessageBreakdown(session(-1)).skillsTokens,
+		);
+	});
+
+	it("re-splits when the budget changes on a stable skills reference (memo keyed on budget)", () => {
+		// One object mutated in place: the skills/tools/prompt refs are unchanged,
+		// so only a budget-aware memo key forces the recompute. Without it the
+		// stale unlimited split would be served.
+		const src = {
+			systemPrompt: [nameOnlyPrompt],
+			agent: { state: { tools: [readTool] } },
+			skills: [wordy, terse],
+			skillsSettings: { catalogDescriptionBudgetChars: -1 },
+		};
+		const unlimited = computeNonMessageBreakdown(src as never).skillsTokens;
+		src.skillsSettings.catalogDescriptionBudgetChars = 0;
+		expect(computeNonMessageBreakdown(src as never).skillsTokens).toBeLessThan(unlimited);
+	});
+});

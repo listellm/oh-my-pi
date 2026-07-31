@@ -870,6 +870,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		agentsMdSearch: { files: agentsMdFiles },
 		workspaceTree,
 		skills: budgetedSkills,
+		skillsDescriptionsOmitted: budgetedSkills.some(skill => skill.descriptionOmitted === true),
 		rules: rules ?? [],
 		alwaysApplyRules: injectedAlwaysApplyRules,
 		cwd: promptCwd,

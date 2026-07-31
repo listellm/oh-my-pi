@@ -30,7 +30,9 @@ const charlie = {
 } satisfies AgentDefinition;
 
 function makeSession(overrides: Partial<Record<SettingPath, unknown>> = {}): ToolSession {
-	return {
+	// Typed (not asserted) so a future required TaskTool session dependency
+	// fails to compile here rather than surfacing as a runtime undefined.
+	const session: ToolSession = {
 		cwd: process.cwd(),
 		hasUI: false,
 		settings: Settings.isolated({
@@ -41,7 +43,8 @@ function makeSession(overrides: Partial<Record<SettingPath, unknown>> = {}): Too
 		}),
 		getSessionFile: () => null,
 		getSessionSpawns: () => "*",
-	} as ToolSession;
+	};
+	return session;
 }
 
 describe("task agent catalogue description budget", () => {
