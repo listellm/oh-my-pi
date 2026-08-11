@@ -1,0 +1,79 @@
+name: Sync upstream patches
+
+on:
+   schedule:
+      - cron: "17 6 * * 1"
+   workflow_dispatch:
+
+permissions:
+   contents: write
+   pull-requests: write
+
+concurrency:
+   group: upstream-sync
+   cancel-in-progress: true
+
+jobs:
+   rebase:
+      name: Rebase fork patches
+      runs-on: ubuntu-22.04
+      env:
+         GH_TOKEN: ${{ github.token }}
+         SYNC_BRANCH: automation/upstream-rebase
+      steps:
+         - uses: actions/checkout@v4
+           with:
+              fetch-depth: 0
+
+         - name: Fetch upstream
+           run: |
+              git remote add upstream https://github.com/can1357/oh-my-pi.git
+              git fetch --prune upstream main
+
+         - name: Rebase fork patches
+           id: rebase
+           shell: bash
+           run: |
+              set -euo pipefail
+              base_sha="$(git rev-parse origin/main)"
+              git switch --create "$SYNC_BRANCH" origin/main
+              git rebase upstream/main
+              git diff --check
+              if [ "$(git rev-parse HEAD)" = "$base_sha" ]; then
+                echo "changed=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "changed=true" >> "$GITHUB_OUTPUT"
+              fi
+
+         - name: Install dependencies
+           if: steps.rebase.outputs.changed == 'true'
+           uses: ./.github/actions/bun-install
+
+         - name: Run focused patch regression tests
+           if: steps.rebase.outputs.changed == 'true'
+           run: bun test packages/coding-agent/test/discovery/agents-md.test.ts
+
+         - name: Push rebased branch
+           if: steps.rebase.outputs.changed == 'true'
+           run: git push --force-with-lease origin "HEAD:refs/heads/${SYNC_BRANCH}"
+
+         - name: Create or update pull request
+           if: steps.rebase.outputs.changed == 'true'
+           shell: bash
+           run: |
+              set -euo pipefail
+              pr_number="$(gh pr list --base main --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')"
+              if [ -z "$pr_number" ]; then
+                gh pr create \
+                  --base main \
+                  --head "$SYNC_BRANCH" \
+                  --title "chore: rebase fork patches" \
+                  --body "Updates the fork patches onto the latest upstream main. CI must pass before merging."
+              else
+                gh pr edit "$pr_number" --title "chore: rebase fork patches" \
+                  --body "Updates the fork patches onto the latest upstream main. CI must pass before merging."
+              fi
+
+         - name: Report no upstream changes
+           if: steps.rebase.outputs.changed == 'false'
+           run: echo "Fork patches already match upstream main."
