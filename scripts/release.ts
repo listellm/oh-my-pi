@@ -16,6 +16,18 @@ import { generateNixBunDeps, resolveNixBunDepsGenerator } from "./gen-nix-bun";
 const changelogGlob = new Glob("packages/*/CHANGELOG.md");
 const packageJsonGlob = new Glob("packages/*/package.json");
 const cargoTomlGlob = new Glob("crates/*/Cargo.toml");
+
+async function replaceInFiles(pattern: RegExp, replacement: string, paths: readonly string[]): Promise<void> {
+	for (const filePath of paths) {
+		const file = Bun.file(filePath);
+		const content = await file.text();
+		const updated = content.replace(pattern, replacement);
+		if (updated === content) {
+			throw new Error(`Pattern did not match ${filePath}: ${pattern}`);
+		}
+		await Bun.write(filePath, updated);
+	}
+}
 /**
  * Strict explicit-version guard: three numeric dot-segments with an optional
  * leading `v` and NO prerelease suffix. Prereleases are rejected because the
@@ -139,6 +151,15 @@ async function watchCI(): Promise<boolean> {
 
 		await Bun.sleep(5000);
 	}
+}
+
+async function dispatchCIForActionsRelease(): Promise<void> {
+	if (Bun.env.GITHUB_ACTIONS !== "true") return;
+
+	const repository = Bun.env.GITHUB_REPOSITORY;
+	if (!repository) throw new Error("GITHUB_REPOSITORY is required in GitHub Actions");
+
+	await $`gh workflow run CI --repo ${repository} --ref main`;
 }
 
 function hasUnreleasedContent(content: string): boolean {
@@ -273,7 +294,7 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 		publicPkgPaths.push(pkgPath);
 	}
 
-	await $`sd '"version": "[^"]+"' ${`"version": "${version}"`} ${publicPkgPaths}`;
+	await replaceInFiles(/"version": "[^"]+"/g, `"version": "${version}"`, publicPkgPaths);
 
 	// Verify
 	console.log("  Verifying versions:");
@@ -292,7 +313,7 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 
 	// 3. Update Rust workspace version
 	console.log(`Updating Rust workspace version to ${version}…`);
-	await $`sd '^version = "[^"]+"' ${`version = "${version}"`} Cargo.toml`;
+	await replaceInFiles(/^version = "[^"]+"/m, `version = "${version}"`, ["Cargo.toml"]);
 
 	// Verify
 	const cargoToml = await Bun.file("Cargo.toml").text();
@@ -329,7 +350,7 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 		"packages/natives/native/index.d.ts",
 		"packages/natives/native/index.js",
 	];
-	await $`sd '__piNativesV[A-Za-z0-9_]+' ${sentinelName} ${sentinelFiles}`;
+	await replaceInFiles(/__piNativesV[A-Za-z0-9_]+/g, sentinelName, sentinelFiles);
 	const libRs = await Bun.file("crates/pi-natives/src/lib.rs").text();
 	if (!libRs.includes(`js_name = "${sentinelName}"`)) {
 		console.error(
@@ -404,6 +425,7 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	const sha = (await git(["rev-parse", "HEAD"]).text()).trim();
 	await git(["tag", "-f", tagRef]);
 	await git(["push", "--atomic", "origin", "refs/heads/main:refs/heads/main", `${sha}:refs/tags/${tagRef}`]);
+	await dispatchCIForActionsRelease();
 	console.log();
 
 	// 9. Watch CI
