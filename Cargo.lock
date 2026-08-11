@@ -4774,7 +4774,7 @@ dependencies = [
 
 [[package]]
 name = "pi-ast"
-version = "17.2.14"
+version = "17.2.15"
 dependencies = [
  "anyhow",
  "ast-grep-core",
@@ -4843,7 +4843,7 @@ dependencies = [
 
 [[package]]
 name = "pi-builtins"
-version = "17.2.14"
+version = "17.2.15"
 dependencies = [
  "ansi-width",
  "anyhow",
@@ -4928,7 +4928,7 @@ dependencies = [
 
 [[package]]
 name = "pi-iso"
-version = "17.2.14"
+version = "17.2.15"
 dependencies = [
  "async-trait",
  "libc",
@@ -4940,7 +4940,7 @@ dependencies = [
 
 [[package]]
 name = "pi-natives"
-version = "17.2.14"
+version = "17.2.15"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5011,7 +5011,7 @@ dependencies = [
 
 [[package]]
 name = "pi-shell"
-version = "17.2.14"
+version = "17.2.15"
 dependencies = [
  "anyhow",
  "brush-core",
@@ -5039,7 +5039,7 @@ dependencies = [
 
 [[package]]
 name = "pi-voice"
-version = "17.2.14"
+version = "17.2.15"
 dependencies = [
  "audiopus_sys",
  "bytes",
@@ -5054,7 +5054,7 @@ dependencies = [
 
 [[package]]
 name = "pi-walker"
-version = "17.2.14"
+version = "17.2.15"
 dependencies = [
  "dashmap",
  "globset",
@@ -5807,9 +5807,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.13"
+version = "0.103.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
+checksum = "0527518605e68109d875e248ea259b6758801cf165e4b2c2733ae3b51f12535a"
 dependencies = [
  "ring",
  "rustls-pki-types",
