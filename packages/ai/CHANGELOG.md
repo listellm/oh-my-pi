@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [17.3.4] - 2026-08-14
+
 ### Fixed
 
 - Fixed `omp usage invalidate` to discard stale OAuth and API-key usage snapshots, then force a cache-bypassing, per-provider serialized refresh so upgraded subscriptions do not silently retain pre-change quota data.
