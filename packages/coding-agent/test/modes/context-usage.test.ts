@@ -200,20 +200,20 @@ describe("computeNonMessageBreakdown skills description budget", () => {
 	}
 
 	it("excludes descriptions the budget omitted", () => {
-		const budgeted = computeNonMessageBreakdown(session(0));
-		const unbudgeted = computeNonMessageBreakdown(session(-1));
+		const budgeted = computeNonMessageBreakdown(session(0), tokenizer);
+		const unbudgeted = computeNonMessageBreakdown(session(-1), tokenizer);
 		expect(budgeted.skillsTokens).toBeLessThan(unbudgeted.skillsTokens);
 		expect(budgeted.skillsTokens).toBeGreaterThan(0);
 		expect(budgeted.skillsTokens).toBeLessThan(100);
 	});
 
 	it("does not over-subtract from the System prompt category", () => {
-		expect(computeNonMessageBreakdown(session(0)).systemPromptTokens).toBeGreaterThan(0);
+		expect(computeNonMessageBreakdown(session(0), tokenizer).systemPromptTokens).toBeGreaterThan(0);
 	});
 
 	it("counts every description when no budget is configured", () => {
-		expect(computeNonMessageBreakdown(session()).skillsTokens).toBe(
-			computeNonMessageBreakdown(session(-1)).skillsTokens,
+		expect(computeNonMessageBreakdown(session(), tokenizer).skillsTokens).toBe(
+			computeNonMessageBreakdown(session(-1), tokenizer).skillsTokens,
 		);
 	});
 
@@ -227,9 +227,9 @@ describe("computeNonMessageBreakdown skills description budget", () => {
 			skills: [wordy, terse],
 			skillsSettings: { catalogDescriptionBudgetChars: -1 },
 		};
-		const unlimited = computeNonMessageBreakdown(src as never).skillsTokens;
+		const unlimited = computeNonMessageBreakdown(src as never, tokenizer).skillsTokens;
 		src.skillsSettings.catalogDescriptionBudgetChars = 0;
-		expect(computeNonMessageBreakdown(src as never).skillsTokens).toBeLessThan(unlimited);
+		expect(computeNonMessageBreakdown(src as never, tokenizer).skillsTokens).toBeLessThan(unlimited);
 	});
 });
 
@@ -265,18 +265,18 @@ describe("computeNonMessageBreakdown agent catalogue budget", () => {
 	it("recomputes tool tokens when the budget changes on a stable tools reference", () => {
 		const { source, settingsStore, settings } = sourceWithLiveTaskDescription(-1);
 		const src = { ...source, settings };
-		const unlimited = computeNonMessageBreakdown(src as never).toolsTokens;
+		const unlimited = computeNonMessageBreakdown(src as never, tokenizer).toolsTokens;
 		settingsStore.catalogDescriptionBudgetChars = 0;
-		expect(computeNonMessageBreakdown(src as never).toolsTokens).toBeLessThan(unlimited);
+		expect(computeNonMessageBreakdown(src as never, tokenizer).toolsTokens).toBeLessThan(unlimited);
 	});
 
 	it("recomputes the collapsed non-message total for the same change", () => {
 		const { source, settingsStore, settings } = sourceWithLiveTaskDescription(0);
 		const src = { ...source, settings };
-		const nameOnly = computeNonMessageTokens(src as never);
+		const nameOnly = computeNonMessageTokens(src as never, tokenizer);
 		settingsStore.catalogDescriptionBudgetChars = -1;
 		// Raising the budget must not serve the cached name-only total, which
 		// would undercount and skip compaction that is actually needed.
-		expect(computeNonMessageTokens(src as never)).toBeGreaterThan(nameOnly);
+		expect(computeNonMessageTokens(src as never, tokenizer)).toBeGreaterThan(nameOnly);
 	});
 });
