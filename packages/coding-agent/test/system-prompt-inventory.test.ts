@@ -747,6 +747,8 @@ describe("system prompt tool inventory", () => {
 			"\n\n",
 		);
 		expect(withTodo).toContain("Todo calls NEVER alone");
+	});
+
 	const BUDGET_SKILLS = [
 		{ name: "skill-alpha", description: "Alpha workflow details" },
 		{ name: "skill-bravo", description: "Bravo workflow details" },
