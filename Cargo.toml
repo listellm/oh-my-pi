@@ -25,6 +25,7 @@ repository = "https://github.com/can1357/oh-my-pi"
 
 [patch.crates-io]
 brush-core = { path = "crates/vendor/brush-core" }
+arrayref = { path = "crates/vendor/arrayref" }
 [profile.release]
 opt-level = 3
 lto = "fat"
