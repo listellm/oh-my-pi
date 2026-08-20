@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [17.4.1] - 2026-08-20
+
+### Added
+
+- Added `skills.catalogDescriptionBudgetChars` and `task.agentCatalogDescriptionBudgetChars` to bound how many characters of skill and agent descriptions reach the prompt. Both default to -1 (unlimited), 0 renders names only, and every skill and agent stays available at any budget ([#5964](https://github.com/can1357/oh-my-pi/issues/5964), [#6936](https://github.com/can1357/oh-my-pi/issues/6936), [#7194](https://github.com/can1357/oh-my-pi/issues/7194)).
+
+### Fixed
+
+- Fixed standalone `AGENTS.md` discovery stopping at nested Git repository roots, so enclosing workspace instructions are loaded while home-level instructions remain scoped correctly.
+
 ## [17.4.0] - 2026-08-20
 
 ### Added
@@ -453,9 +463,6 @@
 - Fixed parsing of POSIX `$EDITOR` commands that contain quoted arguments or executable paths with spaces.
 - Fixed persisted Agent Hub rows losing the explicit caller model role when a subagent used a model override, preserving role provenance across restarts.
 - Fixed unobserved promise rejections in browser helpers (such as `tab.waitForResponse()`) causing tab workers to hang or crash.
-### Fixed
-
-- Fixed standalone `AGENTS.md` discovery stopping at nested Git repository roots, so enclosing workspace instructions are loaded while home-level instructions remain scoped correctly.
 
 ## [17.2.9] - 2026-08-05
 
@@ -546,9 +553,6 @@
 - Fixed issues with `/btw` branch promotion where branches could park behind active turns, cut from outdated session leaves, or leave rejected branch keys indistinguishable from composer input.
 - Fixed database bloat by ensuring archived main and nested session rows are properly cleaned up from `stats.db` during garbage collection.
 - Fixed startup hanging during local model discovery when a timed-out transport left its request pending, which blocked the CLI before OAuth login could finish ([#7482](https://github.com/can1357/oh-my-pi/issues/7482)).
-### Added
-
-- Added `skills.catalogDescriptionBudgetChars` and `task.agentCatalogDescriptionBudgetChars` to bound how many characters of skill and agent descriptions reach the prompt. Both default to -1 (unlimited), 0 renders names only, and every skill and agent stays available at any budget ([#5964](https://github.com/can1357/oh-my-pi/issues/5964), [#6936](https://github.com/can1357/oh-my-pi/issues/6936), [#7194](https://github.com/can1357/oh-my-pi/issues/7194)).
 
 ## [17.2.5] - 2026-08-03
 
