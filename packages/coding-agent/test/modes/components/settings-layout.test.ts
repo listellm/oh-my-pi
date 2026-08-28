@@ -197,4 +197,24 @@ describe("settings layout", () => {
 		expect(nextRendered).toContain("Claude Code");
 		expect(nextRendered).toContain("Preview:");
 	});
+
+	// pathToSettingDef drops a numeric setting that declares no `ui.options`, so
+	// without an option ladder these two render nowhere and their selector
+	// side effects are unreachable.
+	it("exposes both catalogue description budgets in the tasks tab", () => {
+		const defs = getSettingsForTab(createSettingsHost().entries, "tasks");
+
+		for (const path of [
+			"skills.catalogDescriptionBudgetChars",
+			"task.agentCatalogDescriptionBudgetChars",
+		] as SettingPath[]) {
+			const def = defs.find(entry => entry.path === path);
+			expect(def).toMatchObject({ type: "submenu" });
+			if (def?.type !== "submenu") throw new Error(`${path} is not rendered as a submenu`);
+			const values = def.options.map(option => option.value);
+			// The documented endpoints must be selectable.
+			expect(values).toContain("-1");
+			expect(values).toContain("0");
+		}
+	});
 });
