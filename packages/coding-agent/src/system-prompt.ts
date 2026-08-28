@@ -20,6 +20,7 @@ import {
 } from "@oh-my-pi/pi-utils";
 import { contextFileCapability } from "./capability/context-file";
 import { systemPromptCapability } from "./capability/system-prompt";
+import { applyCatalogDescriptionBudget } from "./catalog-budget";
 import { findConfigFile } from "./config";
 import type { Personality, SkillsSettings } from "./config/settings";
 import { type ContextFile, loadCapability, type SystemPrompt as SystemPromptFile } from "./discovery";
@@ -1019,6 +1020,10 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 				xdevTools.some(entry => toolReadsSkillUris(tools.get(entry.name)));
 	const hasSkillUriAccess = hasSkillReader && skills.length > 0;
 	const filteredSkills = hasSkillReader ? skills.filter(skill => skill.hide !== true) : [];
+	const budgetedSkills = applyCatalogDescriptionBudget(
+		filteredSkills,
+		skillsSettings?.catalogDescriptionBudgetChars ?? -1,
+	);
 
 	const effectiveSystemPromptCustomization = dedupePromptSource(systemPromptCustomization, [
 		resolvedCustomPrompt,
@@ -1049,7 +1054,8 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		agentsMdSearch: { files: agentsMdFiles },
 		workspaceTree,
 		hasSkillUriAccess,
-		skills: filteredSkills,
+		skills: budgetedSkills,
+		skillsDescriptionsOmitted: budgetedSkills.some(skill => skill.descriptionOmitted === true),
 		rules: rules ?? [],
 		alwaysApplyRules: injectedAlwaysApplyRules,
 		cwd: promptCwd,
