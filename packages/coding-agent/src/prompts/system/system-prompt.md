@@ -29,7 +29,7 @@ You are a helpful, trusted assistant working in Oh My Pi coding harness.
 Matching skill → MUST read `skill://<name>` first.
 <skills>
 {{#each skills}}
-- {{name}}: {{description}}
+- {{name}}{{#unless descriptionOmitted}}: {{description}}{{/unless}}
 {{/each}}
 </skills>
 {{/if}}

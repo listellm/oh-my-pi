@@ -3,7 +3,7 @@ import type { CompactionSettings } from "@oh-my-pi/pi-agent-core/compaction";
 import { effectiveReserveTokens, resolveThresholdTokens } from "@oh-my-pi/pi-agent-core/compaction";
 import type { Tool as AiTool, Model } from "@oh-my-pi/pi-ai";
 import { toolWireSchema } from "@oh-my-pi/pi-ai/utils/schema";
-import { formatNumber } from "@oh-my-pi/pi-utils";
+import { applyCatalogDescriptionBudget, formatNumber } from "@oh-my-pi/pi-utils";
 import type { Theme } from "../theme";
 
 interface ContextSkill {
@@ -140,6 +140,7 @@ export interface NonMessageTokenSource {
 		};
 	};
 	readonly skills?: readonly ContextSkill[];
+	readonly skillsSettings?: { readonly catalogDescriptionBudgetChars?: number };
 }
 
 /** Shared empty system-prompt part list, avoiding an allocation per render. */
@@ -147,17 +148,30 @@ export const EMPTY_STRING_PARTS: string[] = [];
 const EMPTY_TOOLS: readonly ContextTool[] = [];
 const EMPTY_SKILLS: readonly ContextSkill[] = [];
 
+/** Mirrors the `?? -1` default `buildSystemPrompt` applies to the same setting. */
+function skillsCatalogBudget(session: NonMessageTokenSource): number {
+	return session.skillsSettings?.catalogDescriptionBudgetChars ?? -1;
+}
+
 /**
  * Skills actually rendered into the system prompt, mirroring the filter in
  * `buildSystemPrompt` (`system-prompt.ts`): the `read` tool must be present so
  * the model can fetch skill content, and skills with frontmatter `hide: true`
- * (or `disable-model-invocation`, normalized onto `hide`) are excluded.
+ * (or `disable-model-invocation`, normalized onto `hide`) are excluded, and
+ * `skills.catalogDescriptionBudgetChars` empties the descriptions past its cap.
  * Accounting must count only these so the Skills category and the System-prompt
  * subtraction stay aligned with the provider-facing prompt.
  */
-function renderedSkills(skills: readonly ContextSkill[], tools: readonly ContextTool[]): readonly ContextSkill[] {
+function renderedSkills(
+	skills: readonly ContextSkill[],
+	tools: readonly ContextTool[],
+	budgetChars: number,
+): readonly ContextSkill[] {
 	if (!tools.some(tool => tool.name === "read")) return EMPTY_SKILLS;
-	return skills.filter(skill => skill.hide !== true);
+	return applyCatalogDescriptionBudget(
+		skills.filter(skill => skill.hide !== true),
+		budgetChars,
+	);
 }
 
 export function estimateSkillsTokens(skills: readonly ContextSkill[], tokenizer: Tokenizer): number {
@@ -284,6 +298,7 @@ interface NonMessageTokenCache {
 	sourceRevision: number;
 	skillful: boolean;
 	skillsRef: readonly ContextSkill[];
+	budgetRef: number;
 	// The Agent swaps its Tokenizer instance when the model's encoding changes,
 	// so instance identity doubles as the encoding key.
 	tokenizerRef: Tokenizer;
@@ -314,6 +329,7 @@ function nonMessageTokenCacheEntry(
 	const toolsRef = session.agent?.state?.tools ?? EMPTY_TOOLS;
 	const toolsRevision = getToolSchemaMetadataRevision(toolsRef);
 	const skillsRef = session.skills ?? EMPTY_SKILLS;
+	const budgetRef = skillsCatalogBudget(session);
 	let entry = cachedSession[NON_MESSAGE_TOKEN_CACHE];
 	if (
 		entry &&
@@ -322,6 +338,7 @@ function nonMessageTokenCacheEntry(
 		entry.toolsRevision === toolsRevision &&
 		entry.sourceRevision === sourceRevision &&
 		entry.skillsRef === skillsRef &&
+		entry.budgetRef === budgetRef &&
 		entry.tokenizerRef === tokenizer
 	) {
 		return entry;
@@ -333,6 +350,7 @@ function nonMessageTokenCacheEntry(
 		sourceRevision,
 		skillful: true,
 		skillsRef,
+		budgetRef,
 		tokenizerRef: tokenizer,
 		tokens: undefined,
 		breakdown: undefined,
@@ -378,7 +396,9 @@ export function computeNonMessageBreakdown(
 	if (entry.breakdown && entry.skillful === skillful) return entry.breakdown;
 	const tools = session.agent?.state?.tools ?? EMPTY_TOOLS;
 	const skillsTokens =
-		skillful === false ? 0 : estimateSkillsTokens(renderedSkills(session.skills ?? EMPTY_SKILLS, tools), tokenizer);
+		skillful === false
+			? 0
+			: estimateSkillsTokens(renderedSkills(session.skills ?? EMPTY_SKILLS, tools, skillsCatalogBudget(session)), tokenizer);
 	const toolsTokens = estimateToolSchemaTokens(tools, tokenizer, sourceRevision);
 	const systemPromptParts = session.systemPrompt ?? EMPTY_STRING_PARTS;
 	const systemContextTokens = tokenizer.countTokens(Array.from(systemPromptParts.slice(1), part => part ?? ""));

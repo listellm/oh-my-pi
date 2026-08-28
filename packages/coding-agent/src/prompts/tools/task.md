@@ -89,7 +89,7 @@ Agents named `m<N>` are models the user tagged in this conversation (`<model age
 {{/if}}
 {{#list agents join="\n"}}
 ### {{name}}{{#if readOnly}} (READ-ONLY){{/if}}{{#if blocking}} (BLOCKING: inline result){{/if}}
-{{description}}
-{{#if readOnly}}Use ONLY for investigation; do edits yourself or assign to a writing agent.{{/if}}
+{{#unless descriptionOmitted}}{{description}}
+{{/unless}}{{#if readOnly}}Use ONLY for investigation; do edits yourself or assign to a writing agent.{{/if}}
 {{/list}}
 {{/if}}
