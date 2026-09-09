@@ -434,22 +434,39 @@ describe("computeNonMessageBreakdown skills description budget", () => {
  */
 describe("computeNonMessageBreakdown agent catalogue budget", () => {
 	function sourceWithLiveTaskDescription(budgetChars: number) {
-		const settings = { catalogDescriptionBudgetChars: budgetChars };
+		// Mirrors Settings: a write rebuilds merged state and bumps the monotonic
+		// revision that invalidates settings-backed dynamic tool metadata.
+		let budget = budgetChars;
+		let revision = 0;
+		const settingsStore = {
+			get catalogDescriptionBudgetChars() {
+				return budget;
+			},
+			set catalogDescriptionBudgetChars(next: number) {
+				budget = next;
+				revision++;
+			},
+		};
 		// Stands in for TaskTool: one stable object whose description re-renders
 		// from the current budget on every read.
 		const taskTool = {
 			name: "task",
 			parameters: {},
 			get description() {
-				return settings.catalogDescriptionBudgetChars === 0
+				return budget === 0
 					? "Available agents: scout, designer, reviewer"
 					: `Available agents:\n${"scout does deep investigation across the repository. ".repeat(40)}`;
 			},
 		};
 		return {
-			settings: { get: () => settings.catalogDescriptionBudgetChars },
+			settings: {
+				get: () => budget,
+				get revision() {
+					return revision;
+				},
+			},
 			source: { systemPrompt: ["You are an agent."], agent: { state: { tools: [taskTool] } }, skills: [] },
-			settingsStore: settings,
+			settingsStore,
 		};
 	}
 

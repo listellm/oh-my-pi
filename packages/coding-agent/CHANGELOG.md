@@ -521,6 +521,9 @@
 - Multi-step logins (e.g. Perplexity email → code) now move the input field under the latest prompt instead of leaving it stuck beneath the first one.
 - Todo updates made through Eval's `tool.todo(...)` now persist to the session, so they survive resume/rewind/fork and no longer trigger false incomplete-todo reminders.
 - Native background security scans now accept provider-owned AWS authentication for Amazon Bedrock and Bedrock Mantle without requiring a stored OAuth account ([#12013](https://github.com/can1357/oh-my-pi/issues/12013)).
+### Added
+
+- Added `skills.catalogDescriptionBudgetChars` and `task.agentCatalogDescriptionBudgetChars` to bound how many characters of skill and agent descriptions reach the prompt. Both default to -1 (unlimited), 0 renders names only, and every skill and agent stays available at any budget ([#5964](https://github.com/can1357/oh-my-pi/issues/5964), [#6936](https://github.com/can1357/oh-my-pi/issues/6936), [#7194](https://github.com/can1357/oh-my-pi/issues/7194), [#10115](https://github.com/can1357/oh-my-pi/pull/10115) by [@listellm](https://github.com/listellm)).
 
 ## [18.1.21] - 2026-09-14
 
@@ -1124,10 +1127,6 @@
 - Fixed `lsp diagnostics` incorrectly reporting success for project-aware pull-diagnostic servers when diagnostics time out or fail.
 - Corrected labels under `Settings > Context > Compaction Token Limit`.
 - Fixed orphaned pages, iframes, and workers accumulating in the shared headless browser after abnormal OMP session termination.
-### Added
-
-- Added `skills.catalogDescriptionBudgetChars` and `task.agentCatalogDescriptionBudgetChars` to bound how many characters of skill and agent descriptions reach the prompt. Both default to -1 (unlimited), 0 renders names only, and every skill and agent stays available at any budget ([#5964](https://github.com/can1357/oh-my-pi/issues/5964), [#6936](https://github.com/can1357/oh-my-pi/issues/6936), [#7194](https://github.com/can1357/oh-my-pi/issues/7194)).
-
 ## [18.0.10] - 2026-08-28
 
 ### Added
