@@ -408,7 +408,10 @@ export function computeNonMessageBreakdown(
 	const skillsTokens =
 		skillful === false
 			? 0
-			: estimateSkillsTokens(renderedSkills(session.skills ?? EMPTY_SKILLS, tools, skillsCatalogBudget(session)), tokenizer);
+			: estimateSkillsTokens(
+					renderedSkills(session.skills ?? EMPTY_SKILLS, tools, skillsCatalogBudget(session)),
+					tokenizer,
+				);
 	const toolsTokens = estimateToolSchemaTokens(tools, tokenizer, sourceRevision);
 	const systemPromptParts = session.systemPrompt ?? EMPTY_STRING_PARTS;
 	const systemContextTokens = tokenizer.countTokens(Array.from(systemPromptParts.slice(1), part => part ?? ""));

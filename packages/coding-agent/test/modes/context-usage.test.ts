@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { Tokenizer } from "@oh-my-pi/pi-agent-core";
-import { computeNonMessageBreakdown, estimateToolSchemaTokens } from "@oh-my-pi/pi-tui/status-line/context-usage";
+import {
+	computeNonMessageBreakdown,
+	computeNonMessageTokens,
+	estimateToolSchemaTokens,
+} from "@oh-my-pi/pi-tui/status-line/context-usage";
 import { applyToolProxy } from "../../src/extensibility/tool-proxy";
 
 const tokenizer = new Tokenizer();
@@ -113,27 +117,42 @@ describe("computeNonMessageBreakdown skills description budget", () => {
  * Contract: `TaskTool.description` is a live getter over
  * `task.agentCatalogDescriptionBudgetChars`, so changing that setting rewrites a
  * tool description in place while the tools array keeps its identity. The memo
- * keys off that identity, so the budget has to join the key or the stale tool
+ * keys off that identity, so the settings revision must join the key or the stale tool
  * total survives and compaction is sized against a catalogue that no longer
  * matches the provider-bound one.
  */
 describe("computeNonMessageBreakdown agent catalogue budget", () => {
 	function sourceWithLiveTaskDescription(budgetChars: number) {
-		const settings = { catalogDescriptionBudgetChars: budgetChars, revision: 0 };
+		// Mirrors Settings: a write rebuilds merged state and bumps the monotonic
+		// revision that invalidates settings-backed dynamic tool metadata.
+		let budget = budgetChars;
+		let revision = 0;
+		const settingsStore = {
+			get revision() {
+				return revision;
+			},
+			get catalogDescriptionBudgetChars() {
+				return budget;
+			},
+			set catalogDescriptionBudgetChars(next: number) {
+				budget = next;
+				revision++;
+			},
+		};
 		// Stands in for TaskTool: one stable object whose description re-renders
 		// from the current budget on every read.
 		const taskTool = {
 			name: "task",
 			parameters: {},
 			get description() {
-				return settings.catalogDescriptionBudgetChars === 0
+				return budget === 0
 					? "Available agents: scout, designer, reviewer"
 					: `Available agents:\n${"scout does deep investigation across the repository. ".repeat(40)}`;
 			},
 		};
 		return {
 			source: { systemPrompt: ["You are an agent."], agent: { state: { tools: [taskTool] } }, skills: [] },
-			settingsStore: settings,
+			settingsStore,
 		};
 	}
 
@@ -141,15 +160,15 @@ describe("computeNonMessageBreakdown agent catalogue budget", () => {
 		const { source, settingsStore } = sourceWithLiveTaskDescription(-1);
 		const unlimited = computeNonMessageBreakdown(source as never, tokenizer, settingsStore.revision).toolsTokens;
 		settingsStore.catalogDescriptionBudgetChars = 0;
-		settingsStore.revision++;
-		expect(computeNonMessageBreakdown(source as never, tokenizer, settingsStore.revision).toolsTokens).toBeLessThan(unlimited);
+		expect(computeNonMessageBreakdown(source as never, tokenizer, settingsStore.revision).toolsTokens).toBeLessThan(
+			unlimited,
+		);
 	});
 
 	it("recomputes the collapsed non-message total for the same change", () => {
 		const { source, settingsStore } = sourceWithLiveTaskDescription(0);
 		const nameOnly = computeNonMessageTokens(source as never, tokenizer, settingsStore.revision);
 		settingsStore.catalogDescriptionBudgetChars = -1;
-		settingsStore.revision++;
 		// Raising the budget must not serve the cached name-only total, which
 		// would undercount and skip compaction that is actually needed.
 		expect(computeNonMessageTokens(source as never, tokenizer, settingsStore.revision)).toBeGreaterThan(nameOnly);
