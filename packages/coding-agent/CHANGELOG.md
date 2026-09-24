@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `task.agentCatalogDescriptionBudgetChars` to bound how many characters of agent descriptions reach the task tool prompt. It defaults to -1 (unlimited), 0 renders names only, and every agent stays spawnable at any budget ([#10115](https://github.com/can1357/oh-my-pi/pull/10115) by [@listellm](https://github.com/listellm)).
+
 ## [18.3.0] - 2026-09-24
 
 ### Breaking Changes

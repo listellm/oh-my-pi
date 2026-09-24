@@ -649,6 +649,13 @@ export class SelectorController {
 					this.ctx.showError(`Failed to apply xd:// prompt docs setting: ${err}`);
 				});
 				break;
+			// The budget is read while the task tool description is built, so the
+			// cached base prompt has to be rebuilt for the change to reach the provider.
+			case "task.agentCatalogDescriptionBudgetChars":
+				void this.ctx.session.refreshBaseSystemPrompt().catch(err => {
+					this.ctx.showError(`Failed to apply agent catalogue budget: ${err}`);
+				});
+				break;
 			case "memory.backend":
 				void this.ctx.session.applyMemoryBackend().catch(err => {
 					this.ctx.showError(`Failed to apply memory backend: ${err}`);

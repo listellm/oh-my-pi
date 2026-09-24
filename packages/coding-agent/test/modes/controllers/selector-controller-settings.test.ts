@@ -100,4 +100,18 @@ describe("SelectorController prompt-affecting settings", () => {
 		// persist=true: panel edits are durable, unlike the session-scoped RPC path (#11431).
 		expect(setAutoCompactionEnabled).toHaveBeenCalledWith(false, true);
 	});
+
+	// The budget is only read while the task tool description is rendered, so a
+	// change that skips the rebuild leaves the provider on the previous catalogue.
+	it("rebuilds the prompt when the agent catalogue budget changes", () => {
+		const refreshBaseSystemPrompt = vi.fn(async () => {});
+		const ctx = {
+			session: { refreshBaseSystemPrompt },
+		} as unknown as InteractiveModeContext;
+		const controller = new SelectorController(ctx);
+
+		controller.handleSettingChange("task.agentCatalogDescriptionBudgetChars", 0);
+
+		expect(refreshBaseSystemPrompt).toHaveBeenCalledTimes(1);
+	});
 });
