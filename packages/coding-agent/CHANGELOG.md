@@ -567,6 +567,9 @@
 
 - `providers.anthropic.slowMode` now controls only the low-priority lane; the usage-limit wrap-up allowance is tracked for every first-party Claude subscription account ([#13340](https://github.com/can1357/oh-my-pi/pull/13340) by [@H4vC](https://github.com/H4vC))
 - Enter on the `/model` hub sidebar now moves focus to the model list (like →) instead of acting on the highlighted row ([#13347](https://github.com/can1357/oh-my-pi/pull/13347) by [@H4vC](https://github.com/H4vC))
+### Added
+
+- Added `task.agentCatalogDescriptionBudgetChars` to bound how many characters of agent descriptions reach the task tool prompt. It defaults to -1 (unlimited), 0 renders names only, and every agent stays spawnable at any budget ([#10115](https://github.com/can1357/oh-my-pi/pull/10115) by [@listellm](https://github.com/listellm)).
 
 ### Fixed
 
