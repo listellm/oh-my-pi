@@ -56,6 +56,7 @@ import type {
 	BeforeSubagentSpawnEvent,
 	BeforeSubagentSpawnEventResult,
 	CompactOptions,
+	ContextBreakdown,
 	ContextEvent,
 	ContextEventResult,
 	ContextUsage,
@@ -524,6 +525,7 @@ export class ExtensionRunner {
 	#getContextUsageFn: () => ContextUsage | undefined = () => undefined;
 	#compactFn: (instructionsOrOptions?: string | CompactOptions) => Promise<void> = async () => {};
 	#getSystemPromptFn: () => string[] = () => [];
+	#getContextBreakdownFn: () => ContextBreakdown | undefined = () => undefined;
 	#runEphemeralTurnFn?: ExtensionContextActions["runEphemeralTurn"];
 	#ephemeralTurnBlocker = new AsyncLocalStorage<string | undefined>();
 	#getAsyncJobSnapshotFn: () => AsyncJobSnapshot | null = () => null;
@@ -847,6 +849,7 @@ export class ExtensionRunner {
 		this.#getContextUsageFn = contextActions.getContextUsage;
 		this.#compactFn = contextActions.compact;
 		this.#getSystemPromptFn = contextActions.getSystemPrompt;
+		this.#getContextBreakdownFn = contextActions.getContextBreakdown ?? (() => undefined);
 		this.#runEphemeralTurnFn = contextActions.runEphemeralTurn;
 
 		// Command context actions (optional, only for interactive mode)
@@ -1485,6 +1488,7 @@ export class ExtensionRunner {
 			ui: this.#uiContext,
 			mode: this.#mode,
 			getContextUsage: () => this.#getContextUsageFn(),
+			getContextBreakdown: () => this.#getContextBreakdownFn(),
 			compact: instructionsOrOptions => this.#compactFn(instructionsOrOptions),
 			getAsyncJobSnapshot: () => this.#getAsyncJobSnapshotFn(),
 			hasUI: this.hasUI(),
