@@ -41,6 +41,9 @@
 ### Fixed
 
 - Fixed an `EPIPE: broken pipe` unhandled rejection crashing the session when a debug adapter, eval kernel, IDA worker, or RPC server exits mid-write (seen on Windows) ([#14196](https://github.com/can1357/oh-my-pi/pull/14196) by [@andrebrait](https://github.com/andrebrait))
+### Added
+
+- Extensions can call `ctx.getContextBreakdown()` to read the same per-category context usage that `/context` shows, including free space and the auto-compaction buffer.
 
 ## [18.5.1] - 2026-10-03
 
