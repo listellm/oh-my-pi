@@ -32,6 +32,33 @@ interface Step {
 	cwd?: string;
 }
 
+/** Bun's global bin dir: `bun pm -g bin`, then `${BUN_INSTALL:-$HOME/.bun}/bin`. */
+function resolveGlobalBin(): string {
+	try {
+		const out = Bun.spawnSync(["bun", "pm", "-g", "bin"], { stdout: "pipe", stderr: "ignore" });
+		if (out.exitCode === 0) {
+			const resolved = Buffer.from(out.stdout).toString().trim();
+			if (resolved) return resolved;
+		}
+	} catch {
+		// fall through to the default below
+	}
+	return path.join(process.env.BUN_INSTALL ?? path.join(os.homedir(), ".bun"), "bin");
+}
+
+/**
+ * `bun link` fails with EEXIST on an existing bin since Bun 1.4.4, and the
+ * `link omp` step below repoints that same path at the wrapper, so a re-run
+ * would always die on the link its own previous run left behind.
+ */
+function clearLinkedOmpBin(): void {
+	try {
+		fs.unlinkSync(path.join(resolveGlobalBin(), "omp"));
+	} catch {
+		// nothing to replace
+	}
+}
+
 /**
  * Native equivalent of `scripts/link-omp.sh` for Windows, where `sh` is
  * unavailable (issue #12483). Same semantics: verify the wrapper target,
@@ -48,14 +75,7 @@ function linkOmpWindows(repoRoot: string): number {
 		console.error(`link-omp: target wrapper not found: ${target}`);
 		return 1;
 	}
-	let globalBin = "";
-	try {
-		const out = Bun.spawnSync(["bun", "pm", "-g", "bin"], { stdout: "pipe", stderr: "ignore" });
-		if (out.exitCode === 0) globalBin = Buffer.from(out.stdout).toString().trim();
-	} catch {
-		// fall through to the default below
-	}
-	if (!globalBin) globalBin = path.join(process.env.BUN_INSTALL ?? path.join(os.homedir(), ".bun"), "bin");
+	const globalBin = resolveGlobalBin();
 	const linkPath = path.join(globalBin, "omp");
 	try {
 		fs.mkdirSync(globalBin, { recursive: true });
@@ -89,6 +109,7 @@ const steps: Step[] = [
 
 for (const step of steps) {
 	console.log(`\n▶ ${step.label}`);
+	if (step.label === "coding-agent link") clearLinkedOmpBin();
 	if (step.label === "link omp" && process.platform === "win32") {
 		const exitCode = linkOmpWindows(repoRoot);
 		if (exitCode !== 0) {
