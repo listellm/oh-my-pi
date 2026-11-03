@@ -611,10 +611,11 @@ export interface LaunchHeadlessResult {
 export function buildHeadlessLaunchArgs(
 	viewport: { width: number; height: number },
 	features: HeadlessLaunchFeatures = {},
+	platform: NodeJS.Platform = process.platform,
 ): string[] {
 	const launchArgs = [
-		"--no-sandbox",
-		"--disable-setuid-sandbox",
+		// macOS Seatbelt needs no host setup, unlike Linux root or containers without user namespaces.
+		...(platform === "darwin" ? [] : ["--no-sandbox", "--disable-setuid-sandbox"]),
 		DISABLE_AUTOMATION_CONTROLLED_ARG,
 		"--hide-scrollbars",
 		"--enable-features=WebMCPTesting,DevToolsWebMCPSupport",
