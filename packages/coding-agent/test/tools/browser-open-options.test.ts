@@ -68,6 +68,17 @@ describe("browser open options CDP helpers", () => {
 		expect(args).toContain("--allow-file-access-from-files");
 	});
 
+	it("keeps the Chromium sandbox on macOS and disables it elsewhere", () => {
+		const viewport = { width: 800, height: 600 };
+		const sandboxFlags = ["--no-sandbox", "--disable-setuid-sandbox"];
+		const macArgs = buildHeadlessLaunchArgs(viewport, {}, "darwin");
+		const linuxArgs = buildHeadlessLaunchArgs(viewport, {}, "linux");
+		for (const flag of sandboxFlags) {
+			expect(macArgs).not.toContain(flag);
+			expect(linuxArgs).toContain(flag);
+		}
+	});
+
 	it("rejects insecure and a downloads folder on the relay before opening a tab", async () => {
 		// No relay listens here, so an option refused only after connecting fails differently, and no test reaches a real one.
 		const port = await findFreeCdpPort();
