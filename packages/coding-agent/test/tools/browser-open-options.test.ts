@@ -66,6 +66,17 @@ describe("browser open options CDP helpers", () => {
 		expect(args).toContain("--allow-file-access-from-files");
 	});
 
+	it("keeps the Chromium sandbox on macOS and disables it elsewhere", () => {
+		const viewport = { width: 800, height: 600 };
+		const sandboxFlags = ["--no-sandbox", "--disable-setuid-sandbox"];
+		const macArgs = buildHeadlessLaunchArgs(viewport, {}, "darwin");
+		const linuxArgs = buildHeadlessLaunchArgs(viewport, {}, "linux");
+		for (const flag of sandboxFlags) {
+			expect(macArgs).not.toContain(flag);
+			expect(linuxArgs).toContain(flag);
+		}
+	});
+
 	it("rejects ignore_https_errors on the relay before opening a tab", async () => {
 		const name = `relay-tls-${crypto.randomUUID()}`;
 		const error = await rejectionOf(
