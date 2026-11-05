@@ -1,33 +1,22 @@
-/**
- * Periodic completion self-estimates for running subagents.
- *
- * On the {@link PROBE_DELAYS_MS} backoff schedule the subagent is asked, through
- * the same ephemeral side turn `/btw` uses ({@link AgentSession.runEphemeralTurn}),
- * to estimate how complete its task is. The side turn reuses the live session's
- * system prompt, tools and history, so it reads the main conversation's prompt
- * cache and never touches the transcript. The reply is one JSON line
- * `{"pct": 40, "stage": "…", "watch": "…"}` (see {@link parseCompletionEstimate}):
- * the percentage feeds `AgentProgress.completionPercent`, the stage
- * `AgentProgress.stage` (the running row's label) and the watch hint
- * `AgentProgress.watch` (what the job widget author should chart).
- *
- * Each probe also receives the run's previous estimate and the tool calls the
- * agent is still streaming: a long `write` is invisible in history until it
- * finishes, so without it the estimate stalls near 0% for minutes.
- */
-import { getStreamingPartialJson } from "@oh-my-pi/pi-ai/utils/block-symbols";
+import { instrumentedCompleteSimple, resolveTelemetry } from "@oh-my-pi/pi-agent-core";
+import { withCredentialRedaction } from "@oh-my-pi/pi-ai/providers/transform-messages";
+import { getStreamingPartialJson, markPerCallContextMessage } from "@oh-my-pi/pi-ai/utils/block-symbols";
 import {
 	formatDuration,
 	isInteractiveHost,
 	isRecord,
 	jsonContainerEnd,
 	logger,
-	prompt,
+	truncate,
 	sanitizeText,
 } from "@oh-my-pi/pi-utils";
 import type { Settings } from "../config/settings";
+import type { AgentProgress } from "@oh-my-pi/pi-tui/tools/task";
+import { resolveModelOverride, rolePriorityDefaults } from "../config/model-resolver";
 import completionProbePrompt from "../prompts/system/subagent-completion-probe.md" with { type: "text" };
 import type { AgentSession } from "../session/agent-session";
+import { cfgSecretsEnabled } from "../secrets/settings";
+import { truncateTinyMessage } from "../tiny/message-preproc";
 import { cfgTaskCompletionProbe } from "./settings";
 
 /**
@@ -35,6 +24,8 @@ import { cfgTaskCompletionProbe } from "./settings";
  * off to one side request an hour. The last entry repeats.
  */
 const PROBE_DELAYS_MS = [2, 5, 10, 30, 60].map(minutes => minutes * 60_000);
+const MAX_BRIEF_CHARS = 6000;
+const MAX_PROBE_TOKENS = 256;
 
 /**
  * Whether a subagent spawned by a session at `parentDepth` gets completion probes.
@@ -50,6 +41,7 @@ export function isCompletionProbeEnabled(settings: Settings, parentDepth: number
 export interface CompletionProbeOptions {
 	/** The run's current session; probing skips ticks while it is absent or idle. */
 	session: () => AgentSession | null;
+	progress: () => AgentProgress;
 	/** Stops the timer and cancels an in-flight probe. */
 	signal: AbortSignal;
 	/** Receives each parsed estimate with the side request's cost in USD. */
@@ -154,14 +146,12 @@ export function parseCompletionEstimate(reply: string): CompletionEstimate | und
 	return { percent, ...(stage !== undefined ? { stage } : {}), ...(watch !== undefined ? { watch } : {}) };
 }
 
-/** A tool call the agent is still generating when the probe fires. */
 interface InflightToolCall {
 	name: string;
 	path?: string;
-	chars: number;
+	chars?: number;
 }
 
-/** Tool calls in the session's in-flight assistant message, which the ephemeral snapshot drops. */
 function inflightToolCalls(session: AgentSession): InflightToolCall[] {
 	const message = session.agent.state.streamMessage;
 	if (message?.role !== "assistant") return [];
@@ -170,10 +160,11 @@ function inflightToolCalls(session: AgentSession): InflightToolCall[] {
 		if (block.type !== "toolCall") continue;
 		const path = block.arguments?.path;
 		calls.push({
-			name: block.name,
-			path: typeof path === "string" ? path : undefined,
-			chars: (getStreamingPartialJson(block) ?? JSON.stringify(block.arguments ?? {})).length,
+			name: truncate(block.name, 80),
+			path: typeof path === "string" ? truncate(path, 256) : undefined,
+			chars: getStreamingPartialJson(block)?.length,
 		});
+		if (calls.length === 8) break;
 	}
 	return calls;
 }
@@ -189,7 +180,7 @@ export function startCompletionProbe(options: CompletionProbeOptions): void {
 	if (signal.aborted) return;
 	let step = 0;
 	let timer: NodeJS.Timeout | undefined;
-	let previous: { percent: number; stage?: string; at: number } | undefined;
+	let previous: (CompletionEstimate & { at: number }) | undefined;
 	const probe = async (): Promise<void> => {
 		const session = options.session();
 		if (!session?.isStreaming || signal.aborted) return;
@@ -198,21 +189,71 @@ export function startCompletionProbe(options: CompletionProbeOptions): void {
 				sessionId: session.sessionManager.getSessionId(),
 				parentId: session.sessionManager.getLeafId(),
 			};
-			const { replyText, assistantMessage } = await session.runEphemeralTurn({
-				promptText: prompt.render(completionProbePrompt, {
-					inflight: inflightToolCalls(session),
+			const progress = options.progress();
+			const brief = truncate(
+				JSON.stringify({
+					assignment: truncateTinyMessage(progress.assignment ?? progress.task),
 					previous: previous && {
 						percent: previous.percent,
 						stage: previous.stage,
+						watch: previous.watch,
 						ago: formatDuration(Date.now() - previous.at),
 					},
+					currentTool: progress.currentTool && truncate(progress.currentTool, 80),
+					currentToolArgs: progress.currentToolArgs && truncate(progress.currentToolArgs, 300),
+					intent: progress.lastIntent && truncate(progress.lastIntent, 300),
+					currentToolIntent: progress.currentToolIntent && truncate(progress.currentToolIntent, 300),
+					inflight: inflightToolCalls(session),
+					recentTools: progress.recentTools.slice(0, 4).map(tool => ({
+						tool: truncate(tool.tool, 80),
+						intent: tool.intent && truncate(tool.intent, 200),
+						args: truncate(tool.args, 200),
+						isError: tool.isError,
+					})),
+					recentOutput: progress.recentOutput.slice(0, 8).map(line => truncate(line, 300)),
 				}),
-				signal,
-			});
+				MAX_BRIEF_CHARS,
+			);
+			const { settings, modelRegistry } = session;
+			const configured = settings.getModelRole("smol");
+			const { model } = resolveModelOverride(
+				configured ? [configured] : rolePriorityDefaults("smol"),
+				modelRegistry,
+				settings,
+			);
+			if (!model || !(await modelRegistry.getApiKey(model, usageOwner.sessionId, { signal }))) return;
+			signal.throwIfAborted();
+			const costGate = session.costGate;
+			costGate.admit();
+			const redacted = session.obfuscator?.obfuscate(brief) ?? brief;
+			const context = {
+				systemPrompt: [completionProbePrompt],
+				messages: [{ role: "user" as const, content: truncate(redacted, MAX_BRIEF_CHARS), timestamp: Date.now() }],
+			};
+			markPerCallContextMessage(context.messages[0]);
+			const assistantMessage = await withCredentialRedaction(cfgSecretsEnabled.get(settings), () =>
+				instrumentedCompleteSimple(
+					model,
+					context,
+					{
+						apiKey: modelRegistry.resolver(model, usageOwner.sessionId),
+						sessionId: `${usageOwner.sessionId}:completion-probe`,
+						signal,
+						disableReasoning: true,
+						maxTokens: MAX_PROBE_TOKENS,
+					},
+					{
+						telemetry: resolveTelemetry(session.agent.telemetry, usageOwner.sessionId),
+						oneshotKind: "task_completion_probe",
+					},
+				),
+			);
+			costGate.record(assistantMessage.usage?.cost?.total ?? 0);
 			if (assistantMessage.usage) {
 				session.sessionManager.appendModelUsage(
 					{
 						purpose: "task-completion-probe",
+						role: "smol",
 						api: assistantMessage.api,
 						provider: assistantMessage.provider,
 						model: assistantMessage.model,
@@ -222,13 +263,19 @@ export function startCompletionProbe(options: CompletionProbeOptions): void {
 					usageOwner,
 				);
 			}
+			if (assistantMessage.stopReason === "error" || assistantMessage.stopReason === "aborted") return;
+			const rawReply = assistantMessage.content
+				.filter(block => block.type === "text")
+				.map(block => block.text)
+				.join("\n");
+			const replyText = session.obfuscator?.deobfuscate(rawReply) ?? rawReply;
 			const estimate = parseCompletionEstimate(replyText);
 			if (signal.aborted) return;
 			if (estimate === undefined) {
 				logger.debug("Subagent completion probe reply had no percentage", { reply: replyText.slice(0, 200) });
 				return;
 			}
-			previous = { percent: estimate.percent, stage: estimate.stage, at: Date.now() };
+			previous = { ...estimate, at: Date.now() };
 			options.onEstimate(estimate, assistantMessage.usage?.cost?.total ?? 0);
 		} catch (error) {
 			if (!signal.aborted) {

@@ -1,5 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import { Agent } from "@oh-my-pi/pi-agent-core";
+import * as agentCore from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, Model, Usage } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
@@ -51,6 +52,7 @@ describe("completion probe cost persistence", () => {
 	});
 
 	afterAll(() => authStorage.close());
+	afterEach(() => vi.restoreAllMocks());
 
 	it("keeps late successful probe billing in live and cold lifetime totals across branch changes", async () => {
 		const target = modelRegistry.getAll().find(candidate => candidate.contextWindow && candidate.contextWindow > 0);
@@ -72,6 +74,10 @@ describe("completion probe cost persistence", () => {
 			const warmStartId = sessionManager.appendMessage({ role: "user", content: "Warm start", timestamp: 1 });
 			sessionManager.appendMessage(assistant(target, 0.25, "Warm answer before probing"));
 			sessionManager.appendMessageToBranch(assistant(target, 0.05, "Warm answer on another branch"), warmStartId);
+			const settings = Settings.isolated({ "compaction.enabled": false });
+			settings.setModelRole("smol", `${target.provider}/${target.id}`);
+			vi.spyOn(modelRegistry, "getApiKey").mockResolvedValue("test-key");
+			vi.spyOn(modelRegistry, "getAvailable").mockReturnValue([target]);
 			const agent = new Agent({
 				initialState: {
 					model: target,
@@ -83,18 +89,30 @@ describe("completion probe cost persistence", () => {
 			session = new AgentSession({
 				agent,
 				sessionManager,
-				settings: Settings.isolated({ "compaction.enabled": false }),
+				settings,
 				modelRegistry,
 			});
 			session.agent.state.isStreaming = true;
-			const pendingProbe = Promise.withResolvers<{
-				replyText: string;
-				assistantMessage: AssistantMessage;
-			}>();
-			const probeRequest = vi.spyOn(session, "runEphemeralTurn").mockReturnValue(pendingProbe.promise);
+			const pendingProbe = Promise.withResolvers<AssistantMessage>();
+			const probeRequest = vi.spyOn(agentCore, "instrumentedCompleteSimple").mockReturnValue(pendingProbe.promise);
 
 			startCompletionProbe({
 				session: () => session ?? null,
+				progress: () => ({
+					index: 0,
+					id: "probe-cost",
+					agent: "probe-cost-agent",
+					agentSource: "bundled",
+					status: "running",
+					task: "Warm the probe",
+					recentTools: [],
+					recentOutput: [],
+					toolCount: 0,
+					requests: 0,
+					tokens: 0,
+					cost: 0,
+					durationMs: 0,
+				}),
 				signal: controller.signal,
 				onEstimate: ({ percent }, cost) => estimates.push({ percent, cost }),
 			});
@@ -102,10 +120,7 @@ describe("completion probe cost persistence", () => {
 			await flushMicrotasks();
 			expect(probeRequest).toHaveBeenCalledTimes(1);
 			const interveningLeaf = sessionManager.appendMessage(assistant(target, 0.1, "Warm answer while probing"));
-			pendingProbe.resolve({
-				replyText: "The task is about 80% complete.",
-				assistantMessage: assistant(target, 0.4, "The task is about 80% complete."),
-			});
+			pendingProbe.resolve(assistant(target, 0.4, "The task is about 80% complete."));
 			await flushMicrotasks();
 			controller.abort();
 			vi.useRealTimers();

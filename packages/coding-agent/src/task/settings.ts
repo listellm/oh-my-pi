@@ -512,7 +512,7 @@ export const cfgTaskCompletionProbe = register({
 		group: "Subagents",
 		label: "Subagent Completion Probe",
 		description:
-			"Ask a working subagent, through a cached side request like /btw, to estimate how complete its task is: after 2, 5, 10 and 30 more minutes, then hourly. The estimate shows next to the subagent in wait and task views. Only subagents spawned by the main agent of an interactive session are asked; print, RPC, ACP and SDK runs never probe.",
+			"Estimate subagent completion with the smol model from bounded assignment and activity notes, without rereading its conversation. Probes run after 2, 5, 10 and 30 more minutes, then hourly. Estimates appear in wait and task views. Only direct subagents of an interactive session are probed. Print, RPC, ACP and SDK runs never probe.",
 	},
 });
 

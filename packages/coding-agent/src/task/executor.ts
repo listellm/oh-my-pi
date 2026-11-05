@@ -2370,6 +2370,10 @@ function createSubagentRunMonitor(args: RunMonitorArgs): SubagentRunMonitor {
 				completionProbeStarted = true;
 				startCompletionProbe({
 					session: () => activeSession,
+					progress: () => {
+						refreshRecentOutput();
+						return progress;
+					},
 					signal: AbortSignal.any([listenerSignal, abortSignal]),
 					onEstimate: (estimate, cost) => {
 						if (resolved) return;
